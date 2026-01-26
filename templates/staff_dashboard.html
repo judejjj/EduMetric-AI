@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="glass-panel p-6 rounded-xl">
+        <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
+            Department: {{ dept.name }}
+        </h1>
+        <p class="text-gray-400 text-sm mt-1">Staff Control Panel</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <a href="{% url 'staff_add_user' %}"
+            class="glass-panel p-4 rounded-lg hover:bg-white/5 transition-colors text-center group">
+            <div class="text-emerald-400 font-bold mb-1 group-hover:scale-105 transition-transform">+ Student</div>
+            <div class="text-xs text-gray-500">Add new student</div>
+        </a>
+        <a href="{% url 'staff_add_user' %}?role=teacher"
+            class="glass-panel p-4 rounded-lg hover:bg-white/5 transition-colors text-center group">
+            <div class="text-purple-400 font-bold mb-1 group-hover:scale-105 transition-transform">+ Teacher</div>
+            <div class="text-xs text-gray-500">Add new teacher</div>
+        </a>
+        <a href="{% url 'staff_manage_classes' %}"
+            class="glass-panel p-4 rounded-lg hover:bg-white/5 transition-colors text-center group">
+            <div class="text-blue-400 font-bold mb-1 group-hover:scale-105 transition-transform">Classes</div>
+            <div class="text-xs text-gray-500">Manage S1, S2...</div>
+        </a>
+        <a href="{% url 'staff_manage_subjects' %}"
+            class="glass-panel p-4 rounded-lg hover:bg-white/5 transition-colors text-center group">
+            <div class="text-teal-400 font-bold mb-1 group-hover:scale-105 transition-transform">Subjects</div>
+            <div class="text-xs text-gray-500">Add subjects</div>
+        </a>
+        <a href="{% url 'staff_create_allocation' %}"
+            class="glass-panel p-4 rounded-lg hover:bg-white/5 transition-colors text-center group">
+            <div class="text-pink-400 font-bold mb-1 group-hover:scale-105 transition-transform">Allocations</div>
+            <div class="text-xs text-gray-500">Assign Teachers</div>
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div class="glass-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-emerald-300">Faculty Members</h3>
+            <ul class="space-y-3">
+                {% for teacher in teachers %}
+                <li class="p-3 bg-white/5 rounded-lg border border-white/5">
+                    <div class="flex items-center justify-between">
+                        <div class="cursor-pointer"
+                            onclick="document.getElementById('alloc-{{ teacher.id }}').classList.toggle('hidden')">
+                            <div class="text-gray-200 font-semibold hover:text-emerald-400 transition-colors">
+                                {{ teacher.get_full_name|default:teacher.username }}
+                            </div>
+                            <div class="text-xs text-gray-400">{{ teacher.email }}</div>
+                        </div>
+                        <a href="{% url 'staff_edit_user' teacher.id %}"
+                            class="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-emerald-300 transition-colors">
+                            Edit
+                        </a>
+                    </div>
+                    <div id="alloc-{{ teacher.id }}"
+                        class="hidden mt-3 pl-4 border-l-2 border-emerald-500/30 space-y-1">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Subjects Taken:</p>
+                        {% for alloc in teacher.allocations_list %}
+                        <div class="text-sm text-gray-300">
+                            <span class="text-emerald-400">{{ alloc.subject.name }}</span>
+                            <span class="text-gray-500">for</span> {{ alloc.class_section.name }}
+                        </div>
+                        {% empty %}
+                        <p class="text-xs text-gray-600 italic">No allocations yet.</p>
+                        {% endfor %}
+                    </div>
+                </li>
+                {% empty %}
+                <li class="text-gray-500 text-sm">No teachers assigned.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="glass-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-teal-300">Students</h3>
+            <div class="overflow-y-auto max-h-[400px]">
+                <ul class="space-y-3">
+                    {% for student in students %}
+                    <li class="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                        <div class="flex flex-col">
+                            <span class="text-gray-200">{{ student.get_full_name|default:student.username }}</span>
+                            <span class="text-xs text-teal-400">({{ student.class_section.name|default:"No Class" }})</span>
+                        </div>
+
+                        <div class="flex space-x-2">
+                            <a href="{% url 'staff_manage_non_academic' student.id %}"
+                                class="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-indigo-300 transition-colors">
+                                Records
+                            </a>
+                            <a href="{% url 'staff_edit_user' student.id %}"
+                                class="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-teal-300 transition-colors">
+                                Edit
+                            </a>
+                            <a href="{% url 'staff_delete_user' student.id %}"
+                                class="text-xs bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded text-red-400 transition-colors">
+                                Delete
+                            </a>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="text-gray-500 text-sm">No students assigned.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

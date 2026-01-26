@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="glass-panel p-6 rounded-xl border-b border-blue-500/30">
+        <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+            My Performance
+        </h1>
+        <p class="text-gray-400 text-sm mt-1">Academic & Non-Academic Overview</p>
+    </div>
+
+    <!-- Non-Academic Stats -->
+    {% if non_academic %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="glass-panel p-6 rounded-xl text-center hover:bg-white/5 transition-all">
+            <h3 class="text-gray-400 text-xs uppercase tracking-wider mb-2">Attendance</h3>
+            <div
+                class="relative w-32 h-32 mx-auto flex items-center justify-center rounded-full border-4 border-blue-500/30">
+                <span class="text-2xl font-bold text-blue-400">{{ non_academic.attendance_percentage }}%</span>
+            </div>
+        </div>
+        <div class="glass-panel p-6 rounded-xl text-center hover:bg-white/5 transition-all">
+            <h3 class="text-gray-400 text-xs uppercase tracking-wider mb-2">Lab Performance</h3>
+            <p class="text-4xl font-bold text-cyan-400 mt-4">{{ non_academic.lab_performance }}</p>
+        </div>
+        <div class="glass-panel p-6 rounded-xl text-center hover:bg-white/5 transition-all">
+            <h3 class="text-gray-400 text-xs uppercase tracking-wider mb-2">Discipline Score</h3>
+            <p class="text-4xl font-bold text-green-400 mt-4">{{ non_academic.disciplinary_score }}</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="glass-panel p-4 rounded-xl text-gray-500 text-center text-sm">
+        No non-academic records found for this semester.
+    </div>
+    {% endif %}
+
+    <!-- Academic Records -->
+    <div class="glass-panel p-6 rounded-xl">
+        <h3 class="text-xl font-semibold mb-6 text-white border-b border-white/10 pb-4">Subject Marks</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for record in academic_records %}
+            <div class="p-6 bg-white/5 rounded-xl border border-white/5 hover:border-blue-500/30 transition-all">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h4 class="font-bold text-lg text-white">{{ record.subject.name }}</h4>
+                        <p class="text-xs text-blue-300">{{ record.subject.code }}</p>
+                    </div>
+                    <span class="text-xs text-gray-400">by {{ record.teacher.username }}</span>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-400 mb-1">
+                            <span>Internal</span>
+                            <span>{{ record.internal_marks }}</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-blue-500 rounded-full"
+                                style="width: calc({{ record.internal_marks }} / 50 * 100%)"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-400 mb-1">
+                            <span>Assignment</span>
+                            <span>{{ record.assignment_score }}</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-purple-500 rounded-full"
+                                style="width: calc({{ record.assignment_score }} / 20 * 100%)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-full text-center text-gray-500 py-4">No academic marks entered yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

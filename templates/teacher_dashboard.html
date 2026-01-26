@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}Teacher Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="glass-panel p-6 rounded-xl border-b border-purple-500/30">
+        <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+            My Classes
+        </h1>
+        <p class="text-gray-400 text-sm mt-1">Select a class to manage student performance</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for allocation in allocations %}
+        <div class="glass-panel p-6 rounded-xl hover:bg-white/5 transition-all group relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
+                <div class="h-2 w-2 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.8)]"></div>
+            </div>
+
+            <h3 class="text-xl font-bold text-white mb-1">{{ allocation.subject.name }}</h3>
+            <p class="text-purple-300 font-mono text-sm mb-4">{{ allocation.subject.code }}</p>
+
+            <div class="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
+                <span class="text-gray-400 text-sm">Class: <strong class="text-white">{{ allocation.class_section.name }}</strong></span>
+                
+                <a href="{% url 'manage_marks' allocation.id %}"
+                    class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-semibold shadow-lg shadow-purple-500/20 transition-all">
+                    Open Class
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-12 glass-panel rounded-xl">
+            <p class="text-gray-500 text-lg">No allocations found. Contact the administrator.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
