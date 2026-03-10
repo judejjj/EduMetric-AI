@@ -43,7 +43,9 @@
                     class="p-3 bg-white/5 rounded-lg border border-white/5 text-gray-200 flex justify-between items-center">
                     <span>{{ cls.name }}</span>
                     <span class="text-xs text-gray-500 flex items-center gap-4">
-                        ID: {{ cls.id }}
+                        <a href="{% url 'staff_class_report' cls.id %}"
+                            class="px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded transition-colors">View
+                            Report</a>
                         <a href="{% url 'staff_delete_class' cls.id %}"
                             class="text-red-400 hover:text-red-300 transition-colors">Delete</a>
                     </span>

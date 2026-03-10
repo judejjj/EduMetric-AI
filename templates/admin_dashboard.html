@@ -13,9 +13,13 @@
             <p class="text-gray-400 text-sm mt-1">Global System Overview & Controls</p>
         </div>
         <div class="flex space-x-4">
-            <a href="/admin/" target="_blank"
+            <a href="{% url 'admin_export_csv' %}"
                 class="px-5 py-2 glass-panel hover:bg-white/5 rounded-lg text-sm font-semibold transition-all">
-                Django Admin Panel
+                Export to CSV
+            </a>
+            <a href="{% url 'admin_bulk_upload' %}"
+                class="px-5 py-2 glass-panel hover:bg-white/5 rounded-lg text-sm font-semibold transition-all">
+                Bulk Upload Users
             </a>
             <a href="{% url 'create_allocation' %}"
                 class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 transition-all text-white">
@@ -123,6 +127,87 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="text-center py-8 text-gray-500">No departments found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics & Alerts Area -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
+        <!-- At-Risk Students -->
+        <div class="glass-panel p-6 rounded-xl border-l-4 border-red-500">
+            <div class="flex items-center mb-4 pb-2 border-b border-white/10">
+                <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-3"></div>
+                <h3 class="text-xl font-semibold text-red-100">At-Risk Students</h3>
+            </div>
+            <div class="overflow-y-auto max-h-64">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-gray-400 uppercase tracking-wider sticky top-0 bg-[#0f172a] bg-opacity-90">
+                        <tr>
+                            <th class="py-2">Student</th>
+                            <th class="py-2">Class</th>
+                            <th class="py-2">Attendance</th>
+                            <th class="py-2">Avg Marks</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        {% for record in at_risk_students %}
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-2 font-medium">{{ record.user.username }}</td>
+                            <td class="py-2 text-xs text-gray-400">{{ record.user.class_section.name|default:"-" }}</td>
+                            <td class="py-2 {% if record.attendance < 75 %}text-red-400 font-bold{% endif %}">
+                                {{ record.attendance|default:"N/A" }}%
+                            </td>
+                            <td class="py-2 {% if record.avg_marks < 40 %}text-red-400 font-bold{% endif %}">
+                                {{ record.avg_marks|default:"N/A" }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-4 text-center text-gray-500 text-sm">No at-risk students detected.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Underperforming Teachers -->
+        <div class="glass-panel p-6 rounded-xl border-l-4 border-orange-500">
+            <div class="flex items-center mb-4 pb-2 border-b border-white/10">
+                <svg class="w-5 h-5 text-orange-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                    </path>
+                </svg>
+                <h3 class="text-xl font-semibold text-orange-100">Underperforming Teachers</h3>
+            </div>
+            <div class="overflow-y-auto max-h-64">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-gray-400 uppercase tracking-wider sticky top-0 bg-[#0f172a] bg-opacity-90">
+                        <tr>
+                            <th class="py-2">Teacher</th>
+                            <th class="py-2">Department</th>
+                            <th class="py-2 text-right">Avg Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        {% for record in underperforming_teachers %}
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="py-2 font-medium">{{ record.user.username }}</td>
+                            <td class="py-2 text-xs text-gray-400">{{ record.user.department.name|default:"-" }}</td>
+                            <td class="py-2 text-right text-orange-400 font-bold">
+                                {{ record.avg_feedback|default:"N/A" }} / 5.0
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="py-4 text-center text-gray-500 text-sm">No underperforming teachers
+                                flagged.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

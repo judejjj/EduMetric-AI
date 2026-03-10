@@ -43,30 +43,58 @@
                 <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Role</label>
                 <select name="role" required class="w-full glass-input py-2 px-1 text-lg bg-transparent">
                     {% if target_role == "student" %}
-                        <option value="STUDENT" class="bg-slate-800 text-white" selected>Student</option>
-                        <option value="TEACHER" class="bg-slate-800 text-white">Teacher</option>
+                    <option value="STUDENT" class="bg-slate-800 text-white" selected>Student</option>
+                    <option value="TEACHER" class="bg-slate-800 text-white">Teacher</option>
                     {% elif target_role == "teacher" %}
-                        <option value="STUDENT" class="bg-slate-800 text-white">Student</option>
-                        <option value="TEACHER" class="bg-slate-800 text-white" selected>Teacher</option>
+                    <option value="STUDENT" class="bg-slate-800 text-white">Student</option>
+                    <option value="TEACHER" class="bg-slate-800 text-white" selected>Teacher</option>
                     {% else %}
-                        <option value="STUDENT" class="bg-slate-800 text-white">Student</option>
-                        <option value="TEACHER" class="bg-slate-800 text-white">Teacher</option>
+                    <option value="STUDENT" class="bg-slate-800 text-white">Student</option>
+                    <option value="TEACHER" class="bg-slate-800 text-white">Teacher</option>
                     {% endif %}
                 </select>
             </div>
 
-            {% if classes %}
-            <div class="space-y-2">
-                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Class Section (For Students)</label>
-                <select name="class_id" class="w-full glass-input py-2 px-1 text-lg bg-transparent">
-                    <option value="" class="bg-slate-800 text-gray-500">Select Class...</option>
-                    {% for c in classes %}
-                    <option value="{{ c.id }}" class="bg-slate-800 text-white">{{ c.name }}</option>
-                    {% endfor %}
-                </select>
-                <p class="text-xs text-gray-500">* Leave empty if adding a Teacher</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Department Dropdown -->
+                {% if departments %}
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Department</label>
+                    <select name="department_id" id="department_select"
+                        class="w-full glass-input py-2 px-1 text-lg bg-transparent">
+                        {% for d in departments %}
+                        {% if d.id == request.user.department.id %}
+                        <option value="{{ d.id }}" class="bg-slate-800 text-white" selected>
+                            {{ d.code }} - {{ d.name }}
+                        </option>
+                        {% else %}
+                        <option value="{{ d.id }}" class="bg-slate-800 text-white">
+                            {{ d.code }} - {{ d.name }}
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <!-- Class Dropdown -->
+                {% if classes %}
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Class Section (For
+                        Students)</label>
+                    <select name="class_id" id="class_select"
+                        class="w-full glass-input py-2 px-1 text-lg bg-transparent">
+                        <option value="" class="bg-slate-800 text-gray-500">Select Class...</option>
+                        {% for c in classes %}
+                        <option value="{{ c.id }}" data-dept="{{ c.department.id }}"
+                            class="bg-slate-800 text-white class-option">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500">* Leave empty if adding a Teacher</p>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
+
 
             <button type="submit"
                 class="w-full mt-8 py-3 px-4 bg-gradient-to-r from-pink-600 to-orange-600 hover:from-pink-500 hover:to-orange-500 
@@ -76,4 +104,31 @@
         </form>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const deptSelect = document.getElementById('department_select');
+        const classSelect = document.getElementById('class_select');
+        const classOptions = document.querySelectorAll('.class-option');
+
+        function filterClasses() {
+            if (!deptSelect || !classSelect) return;
+            const selectedDeptId = deptSelect.value;
+            classSelect.value = ""; // Reset class selection
+
+            classOptions.forEach(option => {
+                if (option.getAttribute('data-dept') === selectedDeptId) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+        }
+
+        if (deptSelect) {
+            deptSelect.addEventListener('change', filterClasses);
+            filterClasses(); // Run on load to set initial state
+        }
+    });
+</script>
 {% endblock %}

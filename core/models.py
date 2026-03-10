@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 
 class Department(models.Model):
@@ -80,3 +81,109 @@ class NonAcademicRecord(models.Model):
 
     def __str__(self):
         return f"NonAcademic - {self.student.username}"
+
+
+class TeacherFeedback(models.Model):
+    """
+    Student-submitted (or staff-submitted) qualitative rating for a teacher on a subject.
+    """
+    student = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='given_feedback',
+        limit_choices_to={'role': 'STUDENT'}
+    )
+    teacher = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='received_feedback',
+        limit_choices_to={'role': 'TEACHER'}
+    )
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    score = models.IntegerField(
+        choices=[(i, str(i)) for i in range(1, 6)],
+        help_text="Rating from 1 (Poor) to 5 (Excellent)"
+    )
+    comments = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('student', 'teacher', 'subject')
+
+    def __str__(self):
+        return f"{self.student.username} -> {self.teacher.username} [{self.subject.code}] ({self.score}/5)"
+
+
+class PerformancePrediction(models.Model):
+    """
+    AI Prediction cache — one record per user. Updated by get_ai_prediction().
+    """
+    class Category(models.TextChoices):
+        EXCELLENT = 'Excellent', 'Excellent'
+        AVERAGE = 'Average', 'Average'
+        AT_RISK = 'At-Risk', 'At-Risk'
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE,
+        related_name='prediction'
+    )
+    predicted_category = models.CharField(
+        max_length=20, choices=Category.choices,
+        default=Category.AVERAGE
+    )
+    confidence_score = models.DecimalField(
+        max_digits=4, decimal_places=1, default=0.0
+    )
+    # Stores explainable-AI factor list: [{"name": str, "value": float, "impact": str}, ...]
+    insights = models.JSONField(default=dict)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}: {self.predicted_category} ({self.confidence_score}%)"
+
+
+class SystemAlert(models.Model):
+    """
+    In-app notification / alert for a specific user.
+    """
+    class Severity(models.TextChoices):
+        INFO = 'INFO', 'Info'
+        WARNING = 'WARNING', 'Warning'
+        CRITICAL = 'CRITICAL', 'Critical'
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='alerts'
+    )
+    message = models.CharField(max_length=500)
+    severity = models.CharField(
+        max_length=10, choices=Severity.choices,
+        default=Severity.INFO
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.severity}] {self.user.username}: {self.message[:50]}"
+
+
+class AttendanceRecord(models.Model):
+    """
+    Per-session attendance logged by a Teacher for each student in an Allocation.
+    """
+    student = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='attendance_records',
+        limit_choices_to={'role': 'STUDENT'}
+    )
+    allocation = models.ForeignKey(
+        Allocation, on_delete=models.CASCADE,
+        related_name='attendance_records'
+    )
+    date = models.DateField()
+    is_present = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('student', 'allocation', 'date')
+
+    def __str__(self):
+        status = 'Present' if self.is_present else 'Absent'
+        return f"{self.student.username} - {self.allocation} - {self.date} [{status}]"

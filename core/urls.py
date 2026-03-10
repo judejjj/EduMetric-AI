@@ -26,4 +26,10 @@ urlpatterns = [
     path('staff/delete-class/<int:class_id>/', views.staff_delete_class, name='staff_delete_class'),
     path('staff/delete-subject/<int:subject_id>/', views.staff_delete_subject, name='staff_delete_subject'),
     path('api/get-subjects/', views.get_subjects_by_class, name='get_subjects_by_class'),
+    
+    # New Analytics & AI Routes
+    path('admin-dashboard/bulk-upload/', views.admin_bulk_upload, name='admin_bulk_upload'),
+    path('admin-dashboard/export-csv/', views.admin_export_csv, name='admin_export_csv'),
+    path('staff/class-report/<int:class_id>/', views.staff_class_report, name='staff_class_report'),
+    path('teacher/attendance/<int:allocation_id>/', views.teacher_attendance, name='teacher_attendance'),
 ]
