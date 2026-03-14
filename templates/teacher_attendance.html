@@ -19,32 +19,42 @@
         </div>
     </div>
 
-    <div class="glass-panel p-6 rounded-xl flex justify-between items-center bg-purple-900/10 border-purple-500/30">
-        <div>
-            <h3 class="text-lg font-bold text-white">Date: {{ today|date:"F j, Y" }}</h3>
-            <p class="text-sm text-purple-300">Select the checkbox if the student is PRESENT.</p>
+    <div class="glass-panel p-6 rounded-xl flex flex-wrap justify-between items-center bg-purple-900/10 border-purple-500/30 gap-4">
+        <div class="flex items-center space-x-4">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Select Date</label>
+                <input type="date" 
+                    value="{{ selected_date|date:'Y-m-d' }}" 
+                    onchange="window.location.href='?date='+this.value"
+                    class="glass-input py-1 px-3 text-white">
+            </div>
+            <a href="{% url 'teacher_attendance_report' allocation.id %}" 
+                class="mt-4 sm:mt-0 px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 rounded-lg text-sm font-bold text-white transition-all shadow-lg shadow-teal-500/20">
+                View Full Analytics Report
+            </a>
         </div>
         <div class="text-right">
-            <span class="text-2xl font-bold text-white" id="present-count">0</span>
+            <span class="text-3xl font-bold text-white" id="present-count">0</span>
             <span class="text-sm text-gray-400">/ {{ student_data|length }} Present</span>
         </div>
     </div>
 
     <form method="POST" class="glass-panel p-6 rounded-xl">
         {% csrf_token %}
+        <input type="hidden" name="attendance_date" value="{{ selected_date|date:'Y-m-d' }}">
+        
         <div class="overflow-x-auto mb-6">
             <table class="w-full text-left">
-                <thead
-                    class="text-gray-400 uppercase tracking-wider border-b border-white/10 bg-[#0f172a] bg-opacity-90 sticky top-0">
+                <thead class="text-gray-400 uppercase tracking-wider border-b border-white/10 bg-[#0f172a] bg-opacity-90 sticky top-0">
                     <tr>
                         <th class="py-3 px-4 w-12 text-center">
                             <input type="checkbox" id="select-all"
                                 class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-purple-500"
                                 checked>
                         </th>
-                        <th class="py-3 px-4">Student Name</th>
-                        <th class="py-3 px-4">Username</th>
-                        <th class="py-3 px-4">Status</th>
+                        <th class="py-3 px-4 text-xs">Student Name</th>
+                        <th class="py-3 px-4 text-xs">Username</th>
+                        <th class="py-3 px-4 text-xs">Status</th>
                     </tr>
                 </thead>
                 <tbody class="text-gray-300">
@@ -55,17 +65,15 @@
                                 class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-purple-500 attendance-cb"
                                 {% if item.is_present %}checked{% endif %}>
                         </td>
-                        <td class="py-3 px-4 font-medium text-white">{{ item.user.get_full_name|default:"-" }}</td>
-                        <td class="py-3 px-4">{{ item.user.username }}</td>
-                        <td
-                            class="py-3 px-4 status-text font-bold {% if item.is_present %}text-green-400{% else %}text-red-400{% endif %}">
+                        <td class="py-3 px-4 font-medium text-white">{{ item.user.get_full_name }}</td>
+                        <td class="py-3 px-4 text-gray-400 font-mono text-sm">{{ item.user.username }}</td>
+                        <td class="py-3 px-4 status-text font-bold {% if item.is_present %}text-emerald-400{% else %}text-red-400{% endif %}">
                             {% if item.is_present %}Present{% else %}Absent{% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="4" class="py-8 text-center text-gray-500">No students enrolled in this class
-                            section.</td>
+                        <td colspan="4" class="py-8 text-center text-gray-500">No students enrolled in this class section.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -74,8 +82,8 @@
 
         <div class="flex justify-end pt-4 border-t border-white/10">
             <button type="submit"
-                class="px-8 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-white shadow-lg shadow-purple-500/20 transition-all text-lg tracking-wide">
-                Save Attendance for Today
+                class="px-8 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-white shadow-lg shadow-purple-500/20 transition-all text-lg tracking-wide uppercase">
+                Save Attendance for {{ selected_date|date:"M j" }}
             </button>
         </div>
     </form>

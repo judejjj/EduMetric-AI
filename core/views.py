@@ -1,6 +1,10 @@
 import csv
+import re
 import io
-import datetime
+from datetime import datetime, timedelta
+import joblib
+import pandas as pd
+from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -10,6 +14,7 @@ from django.http import JsonResponse, HttpResponse
 from django.db.models import Count, Avg, Q
 from django.contrib import messages
 from django.utils import timezone
+from django.urls import reverse
 
 from .models import (
     User, Department, ClassSection, Subject, Allocation,
@@ -38,108 +43,68 @@ def is_student(user):
 # Helper: AI Prediction Engine (Rule-Based Placeholder)
 # ---------------------------------------------------------------------------
 
-def get_ai_prediction(user):
-    """
-    Rule-based placeholder for future Scikit-Learn model.
-    Reads AcademicRecord and NonAcademicRecord for a Student user,
-    applies threshold rules, and upserts a PerformancePrediction row.
-    Returns the PerformancePrediction instance (or None if no data).
-    """
-    if user.role != User.Role.STUDENT:
-        return None
+def get_ai_prediction(student):
+    """Predicts student category using the trained ML model and updates PerformancePrediction."""
+    try:
+        # Load the saved brain
+        model = joblib.load('student_model.pkl')
+        
+        # Get latest data for this specific student
+        academic = AcademicRecord.objects.filter(student=student).first()
+        non_academic = NonAcademicRecord.objects.filter(student=student).first()
+        
+        if not academic or not non_academic:
+            return None
 
-    # --- 1. Gather raw metrics ---
-    academic_qs = AcademicRecord.objects.filter(student=user)
-    avg_internal  = academic_qs.aggregate(v=Avg('internal_marks'))['v'] or 0.0
-    avg_assign    = academic_qs.aggregate(v=Avg('assignment_score'))['v'] or 0.0
-    avg_marks     = (float(avg_internal) + float(avg_assign)) / 2
+        # Prepare data for the model (must match the training features)
+        features = pd.DataFrame([{
+            'internal_marks': float(academic.internal_marks),
+            'assignment_score': float(academic.assignment_score),
+            'attendance_percentage': float(non_academic.attendance_percentage),
+            'disciplinary_score': float(non_academic.disciplinary_score)
+        }])
 
-    non_academic  = NonAcademicRecord.objects.filter(student=user).last()
-    attendance    = float(non_academic.attendance_percentage) if non_academic else 0.0
-    lab_perf      = float(non_academic.lab_performance)       if non_academic else 0.0
-    discipline    = float(non_academic.disciplinary_score)    if non_academic else 100.0
+        # Get the prediction (Excellent/Average/At-Risk)
+        category = model.predict(features)[0]
+        
+        # Explainable AI (XAI) Logic
+        insight = ""
+        suggestions = []
+        if category == 'At-Risk':
+            if float(non_academic.attendance_percentage) < 75:
+                insight = "Low attendance is the primary risk factor."
+                suggestions.append("Improve attendance to at least 75%.")
+            else:
+                insight = "Improve internal marks to boost performance."
+                suggestions.append("Focus on upcoming internal assessments.")
+        else:
+            insight = "Keep up the consistent effort across all metrics!"
 
-    # --- 2. Classify ---
-    if avg_marks >= 80 and attendance >= 85:
-        category   = PerformancePrediction.Category.EXCELLENT
-        confidence = 90.0
-    elif avg_marks >= 55 and attendance >= 75:
-        category   = PerformancePrediction.Category.AVERAGE
-        confidence = 75.0
-    else:
-        category   = PerformancePrediction.Category.AT_RISK
-        confidence = 85.0
-
-    # --- 3. Build Explainable AI insights ---
-    insights = {
-        "factors": [
-            {
-                "name":   "Average Academic Marks",
-                "value":  round(avg_marks, 1),
-                "impact": "High" if avg_marks >= 80 else ("Medium" if avg_marks >= 55 else "Low"),
-                "tip":    "Keep up consistent assignment submissions." if avg_marks >= 70
-                          else "Focus on improving internal exam scores.",
-            },
-            {
-                "name":   "Attendance Rate",
-                "value":  attendance,
-                "impact": "High" if attendance >= 85 else ("Medium" if attendance >= 75 else "Low"),
-                "tip":    "Maintain punctuality." if attendance >= 75
-                          else "Low attendance is the primary risk factor — attend all sessions.",
-            },
-            {
-                "name":   "Lab Performance",
-                "value":  lab_perf,
-                "impact": "High" if lab_perf >= 80 else ("Medium" if lab_perf >= 60 else "Low"),
-                "tip":    "Lab scores are strong." if lab_perf >= 80
-                          else "Spend more time on practicals to boost lab scores.",
-            },
-            {
-                "name":   "Discipline Score",
-                "value":  discipline,
-                "impact": "High" if discipline >= 90 else ("Medium" if discipline >= 70 else "Low"),
-                "tip":    "Discipline score is excellent." if discipline >= 90
-                          else "Address disciplinary deductions with your department staff.",
-            },
-        ],
-        "summary_text": (
-            "You are performing excellently. Keep it up!" if category == PerformancePrediction.Category.EXCELLENT
-            else "Performance is average. Targeted effort in weak areas will improve your grade."
-            if category == PerformancePrediction.Category.AVERAGE
-            else "You are at risk of underperforming. Immediate action is recommended."
-        ),
-    }
-
-    # Build per-subject improvement suggestions
-    suggestions = []
-    for rec in academic_qs.select_related('subject'):
-        total = float(rec.internal_marks) + float(rec.assignment_score)
-        if float(rec.assignment_score) < 10:
-            suggestions.append(f"Complete all assignments in {rec.subject.name} to recover {10 - float(rec.assignment_score):.1f} points.")
-        if float(rec.internal_marks) < 30:
-            suggestions.append(f"Revise {rec.subject.name} theory — internal marks are critically low.")
-
-    insights["improvement_suggestions"] = suggestions
-
-    # --- 4. Upsert into DB ---
-    prediction, _ = PerformancePrediction.objects.update_or_create(
-        user=user,
-        defaults={
-            'predicted_category': category,
-            'confidence_score':   confidence,
-            'insights':           insights,
-        }
-    )
-
-    # --- 5. Auto-create SystemAlert if At-Risk ---
-    if category == PerformancePrediction.Category.AT_RISK:
-        SystemAlert.objects.get_or_create(
-            user=user,
-            message="Your performance is classified as At-Risk. Please contact your advisor.",
-            defaults={'severity': SystemAlert.Severity.CRITICAL, 'is_read': False}
+        # Create/Update PerformancePrediction row
+        prediction, _ = PerformancePrediction.objects.update_or_create(
+            user=student,
+            defaults={
+                'predicted_category': category,
+                'confidence_score': 85.0, # Placeholder confidence
+                'insights': {
+                    'summary_text': insight,
+                    'improvement_suggestions': suggestions
+                },
+            }
         )
 
-    return prediction
+        # Auto-create SystemAlert if At-Risk
+        if category == 'At-Risk':
+            SystemAlert.objects.get_or_create(
+                user=student,
+                message="Your performance is classified as At-Risk. Please contact your advisor.",
+                defaults={'severity': SystemAlert.Severity.CRITICAL, 'is_read': False}
+            )
+
+        return prediction
+    except Exception as e:
+        print(f"ML Prediction Error: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +335,7 @@ def staff_dashboard(request):
 
     teachers = User.objects.filter(role=User.Role.TEACHER, department=dept)
     students = User.objects.filter(role=User.Role.STUDENT, department=dept)
+    classes  = ClassSection.objects.filter(department=dept).order_by('name')
 
     # Attach allocations to each teacher for display
     for t in teachers:
@@ -379,6 +345,7 @@ def staff_dashboard(request):
         'dept':           dept,
         'students':       students,
         'teachers':       teachers,
+        'classes':        classes,
         'total_students': students.count(),
         'total_teachers': teachers.count(),
     }
@@ -392,8 +359,7 @@ def staff_dashboard(request):
 @login_required
 @user_passes_test(is_staff)
 def staff_class_report(request, class_id):
-    dept     = request.user.department
-    cls      = get_object_or_404(ClassSection, id=class_id, department=dept)
+    cls      = get_object_or_404(ClassSection, id=class_id)
     students = User.objects.filter(role=User.Role.STUDENT, class_section=cls)
 
     # Compute avg attendance (from NonAcademicRecord) per student
@@ -441,55 +407,56 @@ def staff_class_report(request, class_id):
 def teacher_dashboard(request):
     allocations = Allocation.objects.filter(teacher=request.user).select_related('subject', 'class_section')
 
-    # Teaching Effectiveness Score = avg of all internal_marks recorded by this teacher
-    effectiveness_agg = AcademicRecord.objects.filter(
-        teacher=request.user
-    ).aggregate(avg_marks=Avg('internal_marks'), avg_assign=Avg('assignment_score'))
+    # 1. SAFETY NET: If the teacher has no classes (like teacher_5), skip the AI
+    if not allocations.exists():
+        context = {
+            'allocations': allocations,
+            'effectiveness_score': 0.0,
+            'ai_text': "No classes assigned yet. The AI requires student data to generate insights.",
+            'avg_feedback': 0.0,
+        }
+        return render(request, 'teacher_dashboard.html', context)
 
-    avg_internal = effectiveness_agg['avg_marks'] or 0.0
-    avg_assign   = effectiveness_agg['avg_assign'] or 0.0
-    # Scale to 100: internal max ~50, assignment max ~20 → combined max ~70; normalise to 100
-    raw_score    = (float(avg_internal) / 50.0 * 70) + (float(avg_assign) / 20.0 * 30)
-    effectiveness_score = round(min(raw_score, 100), 1)
+    # 2. GATHER HYBRID DATA: Get the 4 pillars for the new AI
+    workload = allocations.count()
+    records = AcademicRecord.objects.filter(teacher=request.user)
+    
+    avg_marks = float(records.aggregate(v=Avg('internal_marks'))['v'] or 0.0)
+    total_students = records.count()
+    passed_students = records.filter(internal_marks__gte=15).count()
+    pass_rate = float((passed_students / total_students * 100) if total_students > 0 else 0.0)
+    avg_fb = float(TeacherFeedback.objects.filter(teacher=request.user).aggregate(v=Avg('score'))['v'] or 3.0)
 
-    # Per-allocation stats for the AI card
-    allocation_insights = []
-    for alloc in allocations:
-        students_in_class = User.objects.filter(
-            role=User.Role.STUDENT, class_section=alloc.class_section
-        ).count()
-        records = AcademicRecord.objects.filter(
-            teacher=request.user, subject=alloc.subject
-        )
-        avg_i = records.aggregate(v=Avg('internal_marks'))['v']
-        pass_count = records.filter(internal_marks__gte=35).count()
-        allocation_insights.append({
-            'allocation':       alloc,
-            'student_count':    students_in_class,
-            'avg_internal':     round(float(avg_i), 1) if avg_i else 'N/A',
-            'pass_count':       pass_count,
-            'records_entered':  records.count(),
-        })
+    # 3. PREDICT WITH V2 BRAIN
+    try:
+        model = joblib.load('teacher_model.pkl')
+        # Must perfectly match the columns from train_models.py
+        features = pd.DataFrame([{
+            'avg_feedback': avg_fb,
+            'avg_marks': avg_marks,
+            'pass_rate': pass_rate,
+            'workload': float(workload)
+        }])
+        
+        # The V2 model outputs a 0-100 score directly, no need to multiply by 20!
+        effectiveness_score = round(model.predict(features)[0], 1) 
+    except Exception as e:
+        print(f"Teacher ML Error: {e}")
+        effectiveness_score = 0.0
 
-    # Build AI explanation text
+    # 4. AI EXPLANATION LOGIC
     if effectiveness_score >= 80:
-        ai_text = "Excellent teaching effectiveness! Your students show strong performance across all subjects."
-    elif effectiveness_score >= 55:
-        ai_text = "Good teaching effectiveness. Some subjects have lower average marks — consider revision sessions for struggling students."
-    elif allocations.exists():
-        ai_text = "Teaching effectiveness needs attention. Enter student marks to see a more accurate score."
+        ai_text = "Highly effective. Strong balance of student satisfaction and academic results."
+    elif effectiveness_score >= 50:
+        ai_text = "Average effectiveness. Check if low marks or poor feedback is bringing your score down."
     else:
-        ai_text = "No allocations yet. Your score will be calculated once student marks are entered."
-
-    # Avg feedback from students
-    avg_feedback = TeacherFeedback.objects.filter(teacher=request.user).aggregate(v=Avg('score'))['v']
+        ai_text = "Underperforming. High feedback alone cannot compensate for low student pass rates."
 
     context = {
         'allocations':          allocations,
         'effectiveness_score':  effectiveness_score,
         'ai_text':              ai_text,
-        'avg_feedback':         round(float(avg_feedback), 1) if avg_feedback else None,
-        'allocation_insights':  allocation_insights,
+        'avg_feedback':         round(avg_fb, 1),
     }
     return render(request, 'teacher_dashboard.html', context)
 
@@ -507,28 +474,42 @@ def teacher_attendance(request, allocation_id):
         class_section=allocation.class_section
     ).order_by('username')
 
-    today = timezone.now().date()
+    # Time-Machine Logic: Support historical attendance
+    date_str = request.GET.get('date')
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date = timezone.now().date()
+    else:
+        selected_date = timezone.now().date()
 
     if request.method == 'POST':
-        # present_ids is a list of student IDs who were marked present via checkbox
+        # Get date from hidden input to ensure consistency
+        post_date_str = request.POST.get('attendance_date')
+        if post_date_str:
+            save_date = datetime.strptime(post_date_str, '%Y-%m-%d').date()
+        else:
+            save_date = selected_date
+
         present_ids = set(map(int, request.POST.getlist('present_ids')))
         saved_count = 0
         for student in students:
             is_present = student.id in present_ids
-            _, created = AttendanceRecord.objects.update_or_create(
+            AttendanceRecord.objects.update_or_create(
                 student=student,
                 allocation=allocation,
-                date=today,
+                date=save_date,
                 defaults={'is_present': is_present}
             )
             saved_count += 1
-        messages.success(request, f"Attendance recorded for {today} — {len(present_ids)}/{saved_count} present.")
-        return redirect('teacher_attendance', allocation_id=allocation.id)
+        messages.success(request, f"Attendance recorded for {save_date} — {len(present_ids)}/{saved_count} present.")
+        return redirect(reverse('teacher_attendance', args=[allocation.id]) + f"?date={save_date}")
 
-    # Fetch today's existing records (if editing same day)
+    # Fetch existing records for the selected date
     existing = {
         r.student_id: r.is_present
-        for r in AttendanceRecord.objects.filter(allocation=allocation, date=today)
+        for r in AttendanceRecord.objects.filter(allocation=allocation, date=selected_date)
     }
 
     student_data = [
@@ -537,11 +518,42 @@ def teacher_attendance(request, allocation_id):
     ]
 
     context = {
-        'allocation':   allocation,
-        'student_data': student_data,
-        'today':        today,
+        'allocation':    allocation,
+        'student_data':  student_data,
+        'selected_date': selected_date,
     }
     return render(request, 'teacher_attendance.html', context)
+
+
+@login_required
+@user_passes_test(is_teacher)
+def teacher_attendance_report(request, allocation_id):
+    allocation = get_object_or_404(Allocation, id=allocation_id, teacher=request.user)
+    students = User.objects.filter(role=User.Role.STUDENT, class_section=allocation.class_section).order_by('username')
+    
+    report_data = []
+    for student in students:
+        total_classes = AttendanceRecord.objects.filter(student=student, allocation=allocation).count()
+        days_present = AttendanceRecord.objects.filter(student=student, allocation=allocation, is_present=True).count()
+        days_absent = total_classes - days_present
+        
+        percentage = 0.0
+        if total_classes > 0:
+            percentage = round((days_present / total_classes) * 100, 1)
+            
+        report_data.append({
+            'student': student,
+            'total_classes': total_classes,
+            'days_present': days_present,
+            'days_absent': days_absent,
+            'percentage': percentage,
+        })
+        
+    context = {
+        'allocation': allocation,
+        'report_data': report_data,
+    }
+    return render(request, 'attendance_report.html', context)
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +566,7 @@ def student_dashboard(request):
     academic_records = AcademicRecord.objects.filter(student=request.user).select_related('subject', 'teacher')
     non_academic     = NonAcademicRecord.objects.filter(student=request.user).last()
 
-    # Run AI prediction (rule engine)
+    # Run AI prediction (ML model)
     prediction = get_ai_prediction(request.user)
 
     # Low-attendance warning
@@ -567,14 +579,79 @@ def student_dashboard(request):
     if prediction and isinstance(prediction.insights, dict):
         suggestions = prediction.insights.get('improvement_suggestions', [])
 
+    # Today's local live attendance notification
+    todays_attendance = AttendanceRecord.objects.filter(
+        student=request.user, 
+        date=timezone.now().date()
+    ).select_related('allocation__subject')
+
     context = {
         'academic_records':       academic_records,
         'non_academic':           non_academic,
         'prediction':             prediction,
         'low_attendance_warning': low_attendance_warning,
         'suggestions':            suggestions,
+        'todays_attendance':      todays_attendance,
     }
     return render(request, 'student_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_student)
+def student_feedback_view(request):
+    """
+    Dedicated view for students to rate teachers whom they are allocated to.
+    """
+    # 1. Get allocations for the student's class section
+    student_class = request.user.class_section
+    if not student_class:
+        messages.warning(request, "You are not assigned to a class. Please contact staff.")
+        return redirect('student_dashboard')
+
+    allocations = Allocation.objects.filter(class_section=student_class).select_related('teacher', 'subject')
+
+    if request.method == 'POST':
+        teacher_id = request.POST.get('teacher_id')
+        subject_id = request.POST.get('subject_id')
+        score      = request.POST.get('score')
+        comments   = request.POST.get('comments', '')
+
+        try:
+            teacher = get_object_or_404(User, id=teacher_id, role=User.Role.TEACHER)
+            subject = get_object_or_404(Subject, id=subject_id)
+
+            # Update or create feedback to prevent duplicates for same teacher/subject/student
+            TeacherFeedback.objects.update_or_create(
+                student=request.user,
+                teacher=teacher,
+                subject=subject,
+                defaults={
+                    'score': int(score),
+                    'comments': comments
+                }
+            )
+            messages.success(request, f"Feedback submitted successfully for {teacher.username}!")
+        except Exception as e:
+            messages.error(request, f"Error submitting feedback: {str(e)}")
+        
+        return redirect('student_feedback')
+
+    # Fetch existing feedback to pre-fill if needed (optional optimization)
+    existing_feedback = {
+        (f.teacher_id, f.subject_id): f
+        for f in TeacherFeedback.objects.filter(student=request.user)
+    }
+
+    # Attach existing feedback data to allocations for UI display
+    for alloc in allocations:
+        fb = existing_feedback.get((alloc.teacher_id, alloc.subject_id))
+        alloc.existing_score = fb.score if fb else None
+        alloc.existing_comments = fb.comments if fb else ""
+
+    context = {
+        'allocations': allocations,
+    }
+    return render(request, 'student_feedback.html', context)
 
 
 # ---------------------------------------------------------------------------
@@ -825,6 +902,25 @@ def staff_edit_user(request, user_id):
         if password:
             user_obj.set_password(password)
 
+        # Handle department and class_section updates
+        department_id = request.POST.get('department_id')
+        class_section_id = request.POST.get('class_section_id')
+
+        if department_id:
+            try:
+                user_obj.department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                pass
+        
+        if class_section_id:
+            try:
+                user_obj.class_section = ClassSection.objects.get(id=class_section_id)
+            except ClassSection.DoesNotExist:
+                pass
+        elif user_obj.role == User.Role.STUDENT and not class_section_id:
+            # Handle possible unassignment if that's a requirement, but usually students need a class
+            pass
+
         try:
             user_obj.save()
             messages.success(request, f"User {user_obj.username} updated.")
@@ -832,7 +928,13 @@ def staff_edit_user(request, user_id):
         except Exception as e:
             messages.error(request, f"Error updating: {str(e)}")
 
-    return render(request, 'staff_edit_user.html', {'edit_user': user_obj})
+    departments = Department.objects.all()
+    classes = ClassSection.objects.all()
+    return render(request, 'staff_edit_user.html', {
+        'edit_user': user_obj,
+        'departments': departments,
+        'classes': classes
+    })
 
 
 @login_required
@@ -841,18 +943,25 @@ def staff_manage_classes(request):
     dept = request.user.department
     if request.method == 'POST':
         name = request.POST.get('name')
+        department_id = request.POST.get('department_id')
+        
         try:
-            if ClassSection.objects.filter(name=name, department=dept).exists():
-                messages.error(request, f"Class '{name}' already exists in this department.")
+            target_dept = dept
+            if department_id:
+                target_dept = Department.objects.get(id=department_id)
+
+            if ClassSection.objects.filter(name=name, department=target_dept).exists():
+                messages.error(request, f"Class '{name}' already exists in {target_dept.code}.")
             else:
-                ClassSection.objects.create(name=name, department=dept)
-                messages.success(request, f"Class '{name}' created successfully.")
+                ClassSection.objects.create(name=name, department=target_dept)
+                messages.success(request, f"Class '{name}' created successfully in {target_dept.code}.")
                 return redirect('staff_manage_classes')
         except Exception as e:
             messages.error(request, f"Error creating class: {str(e)}")
 
-    classes = ClassSection.objects.filter(department=dept)
-    return render(request, 'staff_manage_classes.html', {'classes': classes, 'dept': dept})
+    classes = ClassSection.objects.all().select_related('department')
+    departments = Department.objects.all()
+    return render(request, 'staff_manage_classes.html', {'classes': classes, 'departments': departments, 'dept': dept})
 
 
 @login_required
@@ -878,9 +987,9 @@ def staff_manage_subjects(request):
         except Exception as e:
             messages.error(request, f"Error creating subject: {str(e)}")
 
-    classes      = ClassSection.objects.filter(department=dept)
+    classes      = ClassSection.objects.all()
     class_filter = request.GET.get('class_filter')
-    subjects     = Subject.objects.filter(class_section__department=dept) | Subject.objects.filter(class_section__isnull=True)
+    subjects     = Subject.objects.all().select_related('class_section')
 
     if class_filter:
         subjects = subjects.filter(class_section_id=class_filter)
@@ -914,18 +1023,24 @@ def staff_create_allocation(request):
 
             Allocation.objects.create(teacher=teacher, subject=subject, class_section=class_section)
             messages.success(request, "Allocation created successfully!")
-            return redirect('staff_dashboard')
+            return redirect('staff_create_allocation') # Changed to redirect back to same page to see new list
         except Exception as e:
             messages.error(request, f"Error creating allocation: {str(e)}")
 
     teachers = User.objects.filter(role=User.Role.TEACHER, department=dept)
     classes  = ClassSection.objects.filter(department=dept)
     subjects = Subject.objects.all()
+    
+    # Fetch existing allocations for the dept for display on right side
+    existing_allocations = Allocation.objects.filter(
+        class_section__department=dept
+    ).select_related('teacher', 'subject', 'class_section').order_by('teacher__username')
 
     context = {
         'teachers': teachers,
         'classes':  classes,
         'subjects': subjects,
+        'existing_allocations': existing_allocations,
     }
     return render(request, 'staff_create_allocation.html', context)
 
@@ -999,3 +1114,188 @@ def staff_manage_non_academic(request, student_id):
             messages.error(request, f"Error updating records: {str(e)}")
 
     return render(request, 'staff_manage_non_academic.html', {'student': student, 'record': record})
+@login_required
+@user_passes_test(is_staff)
+def staff_consolidated_report(request, class_id):
+    class_obj = get_object_or_404(ClassSection, id=class_id)
+    
+    # 1. Filtering Logic
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = timezone.now().date() - timedelta(days=30)
+    else:
+        start_date = timezone.now().date() - timedelta(days=30)
+        
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = timezone.now().date()
+    else:
+        end_date = timezone.now().date()
+
+    # 2. Data Query
+    report_records = AttendanceRecord.objects.filter(
+        allocation__class_section=class_obj,
+        date__range=[start_date, end_date]
+    ).select_related('student', 'allocation__subject').order_by('-date', 'student__username')
+
+    # 3. CSV Export Logic
+    if request.GET.get('export') == 'csv':
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="attendance_{class_obj.name}_{start_date}_{end_date}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Student Name', 'Date', 'Subject', 'Status'])
+        
+        for record in report_records:
+            writer.writerow([
+                record.student.get_full_name() or record.student.username,
+                record.date,
+                record.allocation.subject.name,
+                'Present' if record.is_present else 'Absent'
+            ])
+        return response
+
+    context = {
+        'class_obj': class_obj,
+        'report_records': report_records,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
+    return render(request, 'staff_consolidated_report.html', context)
+
+@login_required
+@user_passes_test(is_staff)
+def staff_attendance_matrix(request, class_id):
+    class_obj = get_object_or_404(ClassSection, id=class_id)
+    
+    # 1. Inputs & Filtering
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    subject_id = request.GET.get('subject_id')
+    
+    # Get all records for this class initially to determine date bounds
+    class_records = AttendanceRecord.objects.filter(allocation__class_section=class_obj)
+    
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = None
+    else:
+        start_date = None
+        
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = None
+    else:
+        end_date = None
+
+    # Base query for the matrix
+    records_query = class_records
+    
+    if start_date:
+        records_query = records_query.filter(date__gte=start_date)
+    if end_date:
+        records_query = records_query.filter(date__lte=end_date)
+    if subject_id and subject_id not in ['all', 'None', '']:
+        records_query = records_query.filter(allocation__subject_id=subject_id)
+
+    # Determine display dates for the UI (if not filtered, show min/max found in DB)
+    actual_start = start_date
+    actual_end = end_date
+    
+    if not actual_start:
+        first_record = class_records.order_by('date').first()
+        actual_start = first_record.date if first_record else timezone.now().date()
+    if not actual_end:
+        last_record = class_records.order_by('-date').first()
+        actual_end = last_record.date if last_record else timezone.now().date()
+    
+    # 2. Logic: Fetch students and build Matrix
+    students_query = User.objects.filter(role=User.Role.STUDENT, class_section=class_obj)
+    
+    # Natural sorting for usernames
+    def natural_sort_key(s):
+        return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+    
+    students = sorted(list(students_query), key=lambda u: natural_sort_key(u.username))
+    subjects = Subject.objects.filter(class_section=class_obj).order_by('name')
+
+    # Get distinct sessions (Date + Subject)
+    sessions_records = records_query.select_related('allocation__subject').order_by('date', 'allocation__subject__code')
+    
+    # Unique sessions list
+    sessions = []
+    seen_sessions = set()
+    for r in sessions_records:
+        session_key = (r.date, r.allocation.subject_id)
+        if session_key not in seen_sessions:
+            sessions.append({
+                'date': r.date,
+                'subject_name': r.allocation.subject.name,
+                'subject_code': r.allocation.subject.code,
+                'subject_id': r.allocation.subject_id
+            })
+            seen_sessions.add(session_key)
+
+    # Build the Matrix
+    matrix = []
+    for student in students:
+        status_list = []
+        for session in sessions:
+            record = records_query.filter(
+                student=student, 
+                date=session['date'], 
+                allocation__subject_id=session['subject_id']
+            ).first()
+            
+            if record:
+                status_list.append(record.is_present)
+            else:
+                status_list.append(None)
+        
+        matrix.append({
+            'student': student,
+            'status_list': status_list
+        })
+
+    # 3. Export Logic
+    if request.GET.get('export') == 'csv':
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="attendance_matrix_{class_obj.name}_{start_date}.csv"'
+        
+        writer = csv.writer(response)
+        header = ['Student Name'] + [f"{s['date']} ({s['subject_code']})" for s in sessions]
+        writer.writerow(header)
+        
+        for row in matrix:
+            writer_row = [row['student'].get_full_name() or row['student'].username]
+            for status in row['status_list']:
+                if status is True:
+                    writer_row.append('P')
+                elif status is False:
+                    writer_row.append('A')
+                else:
+                    writer_row.append('-')
+            writer.writerow(writer_row)
+        return response
+
+    context = {
+        'class_obj': class_obj,
+        'sessions': sessions,
+        'matrix': matrix,
+        'subjects': subjects,
+        'start_date': actual_start,
+        'end_date': actual_end,
+        'selected_subject_id': subject_id,
+    }
+    return render(request, 'staff_attendance_matrix.html', context)

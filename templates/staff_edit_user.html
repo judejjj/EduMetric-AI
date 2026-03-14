@@ -19,16 +19,18 @@
         <form method="post" class="space-y-6">
             {% csrf_token %}
 
-            <div class="space-y-2">
-                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Username</label>
-                <input type="text" name="username" value="{{ edit_user.username }}" required
-                    class="w-full glass-input py-2 px-1 text-lg placeholder-gray-600">
-            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Username</label>
+                    <input type="text" name="username" value="{{ edit_user.username }}" required
+                        class="w-full glass-input py-2 px-1 text-lg placeholder-gray-600">
+                </div>
 
-            <div class="space-y-2">
-                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</label>
-                <input type="email" name="email" value="{{ edit_user.email }}"
-                    class="w-full glass-input py-2 px-1 text-lg placeholder-gray-600">
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</label>
+                    <input type="email" name="email" value="{{ edit_user.email }}"
+                        class="w-full glass-input py-2 px-1 text-lg placeholder-gray-600">
+                </div>
             </div>
 
             <div class="space-y-2">
@@ -36,6 +38,34 @@
                     keep current)</label>
                 <input type="password" name="password"
                     class="w-full glass-input py-2 px-1 text-lg placeholder-gray-600">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-white/5 pt-6">
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Department</label>
+                    <select name="department_id" id="department_select" class="w-full glass-input py-2 px-1 text-lg bg-transparent">
+                        <option value="" class="bg-slate-800 text-gray-500">No Department</option>
+                        {% for d in departments %}
+                        <option value="{{ d.id }}" class="bg-slate-800 text-white" 
+                            {% if edit_user.department_id == d.id %}selected{% endif %}>
+                            {{ d.name }} ({{ d.code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Class Section</label>
+                    <select name="class_section_id" id="class_select" class="w-full glass-input py-2 px-1 text-lg bg-transparent">
+                        <option value="" class="bg-slate-800 text-gray-500">No Class</option>
+                        {% for c in classes %}
+                        <option value="{{ c.id }}" data-dept="{{ c.department.id }}" class="bg-slate-800 text-white class-option"
+                            {% if edit_user.class_section_id == c.id %}selected{% endif %}>
+                            {{ c.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
             <button type="submit"
@@ -46,4 +76,47 @@
         </form>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const deptSelect = document.getElementById('department_select');
+        const classSelect = document.getElementById('class_select');
+        const classOptions = document.querySelectorAll('.class-option');
+
+        function filterClasses() {
+            if (!deptSelect || !classSelect) return;
+            const selectedDeptId = deptSelect.value;
+            
+            let currentClassSelected = false;
+
+            classOptions.forEach(option => {
+                const optionDeptId = option.getAttribute('data-dept');
+                if (!selectedDeptId || optionDeptId === selectedDeptId) {
+                    option.style.display = 'block';
+                    if (option.selected) currentClassSelected = true;
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+
+            // If the currently selected class is now hidden, reset to "No Class"
+            if (!currentClassSelected && classSelect.value !== "") {
+                // Only reset if we actually changed the department (not on initial load)
+                // Actually, it's safer to just keep it if it's visible, otherwise reset.
+            }
+        }
+
+        if (deptSelect) {
+            deptSelect.addEventListener('change', function() {
+                filterClasses();
+                // When department changes, we should probably reset class selection if it's not in the new dept
+                const selectedOption = classSelect.options[classSelect.selectedIndex];
+                if (selectedOption && selectedOption.dataset.dept !== deptSelect.value && deptSelect.value !== "") {
+                    classSelect.value = "";
+                }
+            });
+            filterClasses(); // Run on load to set initial state
+        }
+    });
+</script>
 {% endblock %}

@@ -9,9 +9,13 @@ urlpatterns = [
     path('staff-dashboard/', views.staff_dashboard, name='staff_dashboard'),
     path('teacher-dashboard/', views.teacher_dashboard, name='teacher_dashboard'),
     path('student-dashboard/', views.student_dashboard, name='student_dashboard'),
+    path('student/feedback/', views.student_feedback_view, name='student_feedback'),
     
     path('manage-marks/<int:allocation_id>/', views.manage_marks, name='manage_marks'),
+    path('staff/class/<int:class_id>/consolidated-report/', views.staff_consolidated_report, name='staff_consolidated_report'),
+    path('staff/class/<int:class_id>/matrix/', views.staff_attendance_matrix, name='staff_attendance_matrix'),
     path('create-allocation/', views.create_allocation, name='create_allocation'),
+    path('teacher/allocation/<int:allocation_id>/attendance/report/', views.teacher_attendance_report, name='teacher_attendance_report'),
     path('add-user/', views.add_user, name='add_user'),
     path('create-department/', views.create_department, name='create_department'),
     path('edit-user/<int:user_id>/', views.edit_user, name='edit_user'),

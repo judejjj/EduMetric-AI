@@ -118,9 +118,9 @@
 
             classOptions.forEach(option => {
                 if (option.getAttribute('data-dept') === selectedDeptId) {
-                    option.style.display = 'block';
+                    option.classList.remove('hidden');
                 } else {
-                    option.style.display = 'none';
+                    option.classList.add('hidden');
                 }
             });
         }
