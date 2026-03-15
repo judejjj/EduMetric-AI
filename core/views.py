@@ -207,6 +207,72 @@ def admin_dashboard(request):
         'underperforming_teachers':underperforming_display,
     }
     return render(request, 'admin_dashboard.html', context)
+    
+@login_required
+@user_passes_test(is_admin)
+def admin_send_alert(request, user_id):
+    """Allows admin to send a system alert to a specific teacher or student."""
+    recipient = get_object_or_404(User, id=user_id)
+    message = request.POST.get('message', 'Administrator has flagged your performance for review.')
+    severity = request.POST.get('severity', SystemAlert.Severity.WARNING)
+    
+    SystemAlert.objects.create(
+        user=recipient,
+        message=message,
+        severity=severity,
+        is_read=False
+    )
+    
+    messages.success(request, f"Alert sent to {recipient.username}.")
+    return redirect('admin_dashboard')
+
+@login_required
+@user_passes_test(is_admin)
+def admin_export_at_risk_csv(request):
+    """Exports At-Risk students as CSV using the same logic as the dashboard."""
+    low_attendance_ids = NonAcademicRecord.objects.filter(attendance_percentage__lt=75).values_list('student_id', flat=True)
+    low_marks_ids = AcademicRecord.objects.values('student').annotate(avg_internal=Avg('internal_marks')).filter(avg_internal__lt=40).values_list('student', flat=True)
+    at_risk_ids = set(list(low_attendance_ids) + list(low_marks_ids))
+    students = User.objects.filter(id__in=at_risk_ids).select_related('department', 'class_section')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="at_risk_students.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Username', 'Department', 'Class', 'Attendance %', 'Avg Internal Marks'])
+
+    for s in students:
+        nar = NonAcademicRecord.objects.filter(student=s).last()
+        avg_m = AcademicRecord.objects.filter(student=s).aggregate(v=Avg('internal_marks'))['v']
+        writer.writerow([
+            s.username,
+            s.department.name if s.department else '-',
+            s.class_section.name if s.class_section else '-',
+            float(nar.attendance_percentage) if nar else 'N/A',
+            round(float(avg_m), 1) if avg_m else 'N/A'
+        ])
+    return response
+
+@login_required
+@user_passes_test(is_admin)
+def admin_export_underperforming_teachers_csv(request):
+    """Exports Underperforming Teachers as CSV using the same logic as the dashboard."""
+    teacher_feedback = TeacherFeedback.objects.values('teacher').annotate(avg_score=Avg('score')).filter(avg_score__lt=3.0)
+    underperforming_ids = [t['teacher'] for t in teacher_feedback]
+    teachers = User.objects.filter(id__in=underperforming_ids).select_related('department')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="underperforming_teachers.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Username', 'Department', 'Avg Rating'])
+
+    for t in teachers:
+        avg_fb = TeacherFeedback.objects.filter(teacher=t).aggregate(v=Avg('score'))['v']
+        writer.writerow([
+            t.username,
+            t.department.name if t.department else '-',
+            round(float(avg_fb), 1) if avg_fb else 'N/A'
+        ])
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -452,11 +518,24 @@ def teacher_dashboard(request):
     else:
         ai_text = "Underperforming. High feedback alone cannot compensate for low student pass rates."
 
+    # 5. SCORE BREAKDOWN (For Visualization)
+    # Normed 0-100 components used in the hybrid model
+    score_breakdown = {
+        'academic': round((float(avg_marks) / 50.0 * 50) + (pass_rate / 100.0 * 50), 1),
+        'feedback': round(float(avg_fb) / 5.0 * 100, 1),
+        'workload_impact': -5 if workload > 2 else 0
+    }
+
+    # Recent Alerts
+    alerts = SystemAlert.objects.filter(user=request.user, is_read=False).order_by('-created_at')[:5]
+
     context = {
         'allocations':          allocations,
         'effectiveness_score':  effectiveness_score,
         'ai_text':              ai_text,
         'avg_feedback':         round(avg_fb, 1),
+        'score_breakdown':      score_breakdown,
+        'alerts':               alerts,
     }
     return render(request, 'teacher_dashboard.html', context)
 
@@ -585,6 +664,9 @@ def student_dashboard(request):
         date=timezone.now().date()
     ).select_related('allocation__subject')
 
+    # Recent Alerts (FIX: Added to context)
+    alerts = SystemAlert.objects.filter(user=request.user, is_read=False).order_by('-created_at')[:5]
+
     context = {
         'academic_records':       academic_records,
         'non_academic':           non_academic,
@@ -592,6 +674,7 @@ def student_dashboard(request):
         'low_attendance_warning': low_attendance_warning,
         'suggestions':            suggestions,
         'todays_attendance':      todays_attendance,
+        'alerts':                 alerts,
     }
     return render(request, 'student_dashboard.html', context)
 

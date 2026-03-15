@@ -32,8 +32,11 @@ urlpatterns = [
     path('api/get-subjects/', views.get_subjects_by_class, name='get_subjects_by_class'),
     
     # New Analytics & AI Routes
+    path('admin-dashboard/send-alert/<int:user_id>/', views.admin_send_alert, name='admin_send_alert'),
     path('admin-dashboard/bulk-upload/', views.admin_bulk_upload, name='admin_bulk_upload'),
     path('admin-dashboard/export-csv/', views.admin_export_csv, name='admin_export_csv'),
+    path('admin-dashboard/export-at-risk-csv/', views.admin_export_at_risk_csv, name='admin_export_at_risk_csv'),
+    path('admin-dashboard/export-underperforming-csv/', views.admin_export_underperforming_teachers_csv, name='admin_export_underperforming_teachers_csv'),
     path('staff/class-report/<int:class_id>/', views.staff_class_report, name='staff_class_report'),
     path('teacher/attendance/<int:allocation_id>/', views.teacher_attendance, name='teacher_attendance'),
 ]

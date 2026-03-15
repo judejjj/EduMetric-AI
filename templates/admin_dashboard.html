@@ -141,7 +141,10 @@
         <div class="glass-panel p-6 rounded-xl border-l-4 border-red-500">
             <div class="flex items-center mb-4 pb-2 border-b border-white/10">
                 <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-3"></div>
-                <h3 class="text-xl font-semibold text-red-100">At-Risk Students</h3>
+                <h3 class="text-xl font-semibold text-red-100 italic">At-Risk Students</h3>
+                <a href="{% url 'admin_export_at_risk_csv' %}" class="ml-auto text-[10px] text-red-400 hover:text-white border border-red-500/20 px-2 py-0.5 rounded transition-all">
+                    Download Report
+                </a>
             </div>
             <div class="overflow-y-auto max-h-64">
                 <table class="w-full text-left text-sm">
@@ -151,6 +154,7 @@
                             <th class="py-2">Class</th>
                             <th class="py-2">Attendance</th>
                             <th class="py-2">Avg Marks</th>
+                            <th class="py-2 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="text-gray-300">
@@ -163,6 +167,24 @@
                             </td>
                             <td class="py-2 {% if record.avg_marks < 40 %}text-red-400 font-bold{% endif %}">
                                 {{ record.avg_marks|default:"N/A" }}
+                            </td>
+                            <td class="py-2 text-right relative" x-data="{ showAlertBox: false }">
+                                <button type="button" @click="showAlertBox = !showAlertBox" 
+                                    class="text-xs bg-red-500/10 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded border border-red-500/20 transition-all">
+                                    Alert
+                                </button>
+                                <!-- Inline Alert Box -->
+                                <div x-show="showAlertBox" x-transition 
+                                    class="absolute right-0 top-full mt-2 z-50 p-4 bg-slate-800 border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)] rounded-xl w-72 text-left">
+                                    <form action="{% url 'admin_send_alert' record.user.id %}" method="POST">
+                                        {% csrf_token %}
+                                        <textarea name="message" class="w-full bg-white/5 border border-white/10 rounded p-2 text-xs text-white mb-2" rows="2" placeholder="Type custom alert..."></textarea>
+                                        <div class="flex justify-between items-center">
+                                            <button type="button" @click="showAlertBox = false" class="text-[10px] text-gray-400 hover:text-white">Cancel</button>
+                                            <button type="submit" class="text-[10px] bg-red-600 px-2 py-1 rounded text-white font-bold">Send</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
@@ -185,6 +207,9 @@
                     </path>
                 </svg>
                 <h3 class="text-xl font-semibold text-orange-100">Underperforming Teachers</h3>
+                <a href="{% url 'admin_export_underperforming_teachers_csv' %}" class="ml-auto text-[10px] text-orange-400 hover:text-white border border-orange-500/20 px-2 py-0.5 rounded transition-all">
+                    Download Report
+                </a>
             </div>
             <div class="overflow-y-auto max-h-64">
                 <table class="w-full text-left text-sm">
@@ -193,6 +218,7 @@
                             <th class="py-2">Teacher</th>
                             <th class="py-2">Department</th>
                             <th class="py-2 text-right">Avg Rating</th>
+                            <th class="py-2 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="text-gray-300">
@@ -202,6 +228,24 @@
                             <td class="py-2 text-xs text-gray-400">{{ record.user.department.name|default:"-" }}</td>
                             <td class="py-2 text-right text-orange-400 font-bold">
                                 {{ record.avg_feedback|default:"N/A" }} / 5.0
+                            </td>
+                            <td class="py-2 text-right relative" x-data="{ showAlertBox: false }">
+                                <button type="button" @click="showAlertBox = !showAlertBox" 
+                                    class="text-xs bg-orange-500/10 hover:bg-orange-500/30 text-orange-400 px-2 py-1 rounded border border-orange-500/20 transition-all">
+                                    Alert
+                                </button>
+                                <!-- Inline Alert Box -->
+                                <div x-show="showAlertBox" x-transition 
+                                    class="absolute right-0 top-full mt-2 z-50 p-4 bg-slate-800 border-2 border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)] rounded-xl w-72 text-left">
+                                    <form action="{% url 'admin_send_alert' record.user.id %}" method="POST">
+                                        {% csrf_token %}
+                                        <textarea name="message" class="w-full bg-white/5 border border-white/10 rounded p-2 text-xs text-white mb-2" rows="2" placeholder="Type custom alert..."></textarea>
+                                        <div class="flex justify-between items-center">
+                                            <button type="button" @click="showAlertBox = false" class="text-[10px] text-gray-400 hover:text-white">Cancel</button>
+                                            <button type="submit" class="text-[10px] bg-orange-600 px-2 py-1 rounded text-white font-bold">Send</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
