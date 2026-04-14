@@ -1,3 +1,9 @@
+import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from datetime import time 
+from django.utils import timezone
+
 import csv
 import re
 import io
@@ -20,7 +26,19 @@ from .models import (
     User, Department, ClassSection, Subject, Allocation,
     AcademicRecord, NonAcademicRecord,
     TeacherFeedback, PerformancePrediction, SystemAlert, AttendanceRecord,
+    TimetableSlot,
 )
+
+
+
+COLLEGE_BELL_SCHEDULE = {
+    1: (time(9, 0), time(10, 0)),
+    2: (time(10, 5), time(11, 5)),
+    3: (time(11, 10), time(12, 10)),
+    4: (time(13, 10), time(14, 10)),
+    5: (time(14, 15), time(15, 15)),
+    6: (time(15, 20), time(16, 20))
+}
 
 # ---------------------------------------------------------------------------
 # Helper: Role predicate functions (UNCHANGED)
@@ -529,6 +547,24 @@ def teacher_dashboard(request):
     # Recent Alerts
     alerts = SystemAlert.objects.filter(user=request.user, is_read=False).order_by('-created_at')[:5]
 
+    local_now = timezone.localtime(timezone.now())
+    current_time_obj = local_now.time()
+    current_day = local_now.strftime('%a').upper()
+    
+    current_period = None
+    for period, (start_t, end_t) in COLLEGE_BELL_SCHEDULE.items():
+        if start_t <= current_time_obj <= end_t:
+            current_period = period
+            break
+
+    live_class = None
+    if current_period:
+        live_class = TimetableSlot.objects.filter(
+            allocation__teacher=request.user,
+            day_of_week=current_day,
+            period_number=current_period
+        ).first()
+
     context = {
         'allocations':          allocations,
         'effectiveness_score':  effectiveness_score,
@@ -536,6 +572,8 @@ def teacher_dashboard(request):
         'avg_feedback':         round(avg_fb, 1),
         'score_breakdown':      score_breakdown,
         'alerts':               alerts,
+        'live_class':           live_class,
+
     }
     return render(request, 'teacher_dashboard.html', context)
 
@@ -1382,3 +1420,54 @@ def staff_attendance_matrix(request, class_id):
         'selected_subject_id': subject_id,
     }
     return render(request, 'staff_attendance_matrix.html', context)
+
+
+@login_required
+@user_passes_test(is_staff)
+def staff_timetable_builder(request, class_id):
+    class_section = get_object_or_404(ClassSection, id=class_id)
+    # Get all subjects/teachers assigned to this specific class
+    allocations = Allocation.objects.filter(class_section=class_section)
+    # Get existing timetable to pre-fill the grid if they are editing it
+    existing_slots = TimetableSlot.objects.filter(class_section=class_section)
+    
+    context = {
+        'class_section': class_section,
+        'allocations': allocations,
+        'existing_slots': existing_slots,
+    }
+    return render(request, 'staff_timetable_builder.html', context)
+
+
+@login_required
+@user_passes_test(is_staff)
+@require_POST
+def save_timetable(request, class_id):
+    class_section = get_object_or_404(ClassSection, id=class_id)
+    try:
+        data = json.loads(request.body) 
+        
+        TimetableSlot.objects.filter(class_section=class_section).delete()
+        
+        slots_to_create = []
+        for item in data:
+            allocation = Allocation.objects.get(id=item['allocation_id'])
+            slots_to_create.append(TimetableSlot(
+                class_section=class_section,
+                day_of_week=item['day'],
+                period_number=int(item['period']),
+                allocation=allocation
+            ))
+            
+        TimetableSlot.objects.bulk_create(slots_to_create)
+        return JsonResponse({'status': 'success', 'message': 'Timetable saved!'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@login_required
+@user_passes_test(is_teacher)
+def teacher_timetable(request):
+    slots = TimetableSlot.objects.filter(allocation__teacher=request.user).select_related(
+        'allocation__subject', 'class_section'
+    ).order_by('day_of_week', 'period_number')
+    return render(request, 'teacher_timetable.html', {'slots': slots})

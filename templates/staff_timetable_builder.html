@@ -1,0 +1,385 @@
+{% extends 'base.html' %}
+
+{% block title %}Timetable Builder{% endblock %}
+
+{% block content %}
+<style>
+/* Subtly colored left border for pills to give them some visual pop */
+.pill-color-0 { border-left: 4px solid #3b82f6; } /* neoblue */
+.pill-color-1 { border-left: 4px solid #8b5cf6; } /* neon purple */
+.pill-color-2 { border-left: 4px solid #10b981; } /* neon green */
+.pill-color-3 { border-left: 4px solid #f43f5e; } /* neon pink */
+.pill-color-4 { border-left: 4px solid #f59e0b; } /* neon orange */
+
+.drop-zone {
+    min-height: 80px;
+    transition: background-color 0.2s ease;
+}
+</style>
+
+<div class="space-y-8">
+    <div class="glass-panel p-6 rounded-xl border-b border-purple-500/30 flex justify-between items-center flex-wrap gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                Interactive Timetable Builder
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">Drag and drop subjects into the grid for <strong>{{ class_section.name }}</strong>.</p>
+        </div>
+        <button id="saveTimetableBtn" class="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-400 hover:from-orange-500 hover:to-orange-300 text-white font-bold rounded-lg shadow-[0_0_15px_rgba(234,88,12,0.6)] hover:shadow-[0_0_25px_rgba(234,88,12,0.8)] border border-orange-400 transition-all">
+            Save Timetable
+        </button>
+    </div>
+
+    <!-- CSRF Token for Fetch API -->
+    {% csrf_token %}
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        <!-- Left Sidebar: Available Subjects -->
+        <div class="md:col-span-1 glass-panel p-5 rounded-xl border border-white/10 max-h-[75vh] overflow-y-auto">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-white/10 pb-2">Available Subjects</h2>
+            
+            <div id="allocationsContainer" class="space-y-3">
+                {% for allocation in allocations %}
+                <!-- Added a small trick modulo coloring using forloop.counter0 -->
+                <div class="glass-pill p-3 rounded-lg border border-white/10 bg-white/5 cursor-grab hover:bg-white/10 transition-all shadow-sm pill-color-{{ forloop.counter0|default:0|add:0|stringformat:"d"|slice:"-1:" }}"
+                     draggable="true"
+                     data-allocation-id="{{ allocation.id }}"
+                     data-subject-name="{{ allocation.subject.name }}"
+                     data-teacher-name="{{ allocation.teacher.username }}">
+                    <div class="font-bold text-white text-sm truncate" title="{{ allocation.subject.name }}">{{ allocation.subject.name }}</div>
+                    <div class="text-[11px] text-gray-400 mt-0.5 truncate uppercase tracking-wide">{{ allocation.teacher.username }}</div>
+                </div>
+                {% empty %}
+                <p class="text-sm text-gray-500 italic">No allocations found for this class.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Right Area: Timetable Grid -->
+        <div class="md:col-span-3 glass-panel p-5 rounded-xl border border-white/10 overflow-x-auto shadow-xl">
+            <table class="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                    <tr>
+                        <th class="p-3 border-b border-white/10 text-gray-400 font-semibold w-24 uppercase tracking-wider text-sm">Day \ P</th>
+                        {% for p in "123456"|make_list %}
+                        <th class="p-3 border-b border-white/10 text-gray-400 font-semibold text-center w-32">Period {{ p }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in "12345" %}
+                        <tr>
+                            {% if day == "1" %}{% with d="MON" %}
+                                <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                                {% for p in "123456"|make_list %}
+                                <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent hover:bg-white/5 relative drop-zone h-24 align-top transition-colors" data-day="{{ d }}" data-period="{{ p }}">
+                                    {% for slot in existing_slots %}
+                                        {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                            <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                                                 draggable="true"
+                                                 data-allocation-id="{{ slot.allocation.id }}"
+                                                 data-subject-name="{{ slot.allocation.subject.name }}"
+                                                 data-teacher-name="{{ slot.allocation.teacher.username }}">
+                                                <div class="text-xs font-bold text-white truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ slot.allocation.teacher.username }}</div>
+                                                <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            {% endwith %}{% endif %}
+                            
+                            {% if day == "2" %}{% with d="TUE" %}
+                                <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                                {% for p in "123456"|make_list %}
+                                <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent hover:bg-white/5 relative drop-zone h-24 align-top transition-colors" data-day="{{ d }}" data-period="{{ p }}">
+                                    {% for slot in existing_slots %}
+                                        {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                            <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                                                 draggable="true"
+                                                 data-allocation-id="{{ slot.allocation.id }}"
+                                                 data-subject-name="{{ slot.allocation.subject.name }}"
+                                                 data-teacher-name="{{ slot.allocation.teacher.username }}">
+                                                <div class="text-xs font-bold text-white truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ slot.allocation.teacher.username }}</div>
+                                                <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            {% endwith %}{% endif %}
+                            
+                            {% if day == "3" %}{% with d="WED" %}
+                                <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                                {% for p in "123456"|make_list %}
+                                <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent hover:bg-white/5 relative drop-zone h-24 align-top transition-colors" data-day="{{ d }}" data-period="{{ p }}">
+                                    {% for slot in existing_slots %}
+                                        {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                            <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                                                 draggable="true"
+                                                 data-allocation-id="{{ slot.allocation.id }}"
+                                                 data-subject-name="{{ slot.allocation.subject.name }}"
+                                                 data-teacher-name="{{ slot.allocation.teacher.username }}">
+                                                <div class="text-xs font-bold text-white truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ slot.allocation.teacher.username }}</div>
+                                                <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            {% endwith %}{% endif %}
+                            
+                            {% if day == "4" %}{% with d="THU" %}
+                                <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                                {% for p in "123456"|make_list %}
+                                <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent hover:bg-white/5 relative drop-zone h-24 align-top transition-colors" data-day="{{ d }}" data-period="{{ p }}">
+                                    {% for slot in existing_slots %}
+                                        {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                            <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                                                 draggable="true"
+                                                 data-allocation-id="{{ slot.allocation.id }}"
+                                                 data-subject-name="{{ slot.allocation.subject.name }}"
+                                                 data-teacher-name="{{ slot.allocation.teacher.username }}">
+                                                <div class="text-xs font-bold text-white truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ slot.allocation.teacher.username }}</div>
+                                                <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            {% endwith %}{% endif %}
+                            
+                            {% if day == "5" %}{% with d="FRI" %}
+                                <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                                {% for p in "1234567"|make_list %}
+                                <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent hover:bg-white/5 relative drop-zone h-24 align-top transition-colors" data-day="{{ d }}" data-period="{{ p }}">
+                                    {% for slot in existing_slots %}
+                                        {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                            <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                                                 draggable="true"
+                                                 data-allocation-id="{{ slot.allocation.id }}"
+                                                 data-subject-name="{{ slot.allocation.subject.name }}"
+                                                 data-teacher-name="{{ slot.allocation.teacher.username }}">
+                                                <div class="text-xs font-bold text-white truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ slot.allocation.teacher.username }}</div>
+                                                <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            {% endwith %}{% endif %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // ------------------------------------------------------------
+    // 1. Initial hydration for pre-rendered existing_slots if Django split filter fails
+    // ------------------------------------------------------------
+    const existingSlotsData = [
+        {% for slot in existing_slots %}
+        {
+            day: "{{ slot.day_of_week }}",
+            period: "{{ slot.period_number }}",
+            allocId: "{{ slot.allocation.id }}",
+            subject: "{{ slot.allocation.subject.name|escapejs }}",
+            teacher: "{{ slot.allocation.teacher.username|escapejs }}"
+        },
+        {% endfor %}
+    ];
+
+    // If template didn't render it directly inside the loop because |split is missing
+    const isGridEmpty = document.querySelectorAll('.drop-zone .glass-pill').length === 0;
+    if (isGridEmpty && existingSlotsData.length > 0) {
+        existingSlotsData.forEach(slot => {
+            const cell = document.querySelector(`.drop-zone[data-day="${slot.day}"][data-period="${slot.period}"]`);
+            if (cell) {
+                cell.innerHTML = `
+                    <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md pill-color-0"
+                         draggable="true"
+                         data-allocation-id="${slot.allocId}"
+                         data-subject-name="${slot.subject}"
+                         data-teacher-name="${slot.teacher}">
+                        <div class="text-xs font-bold text-white truncate" title="${slot.subject}">${slot.subject}</div>
+                        <div class="text-[10px] text-gray-400 mt-0.5 truncate">${slot.teacher}</div>
+                        <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                    </div>
+                `;
+            }
+        });
+    }
+
+
+    // ------------------------------------------------------------
+    // 2. Drag and Drop Logic
+    // ------------------------------------------------------------
+    let draggedPill = null;
+    
+    // Delegation for dragstart/dragend since pills can be created dynamically
+    document.addEventListener('dragstart', (e) => {
+        const target = e.target.closest('.glass-pill[draggable="true"]');
+        if (target) {
+            draggedPill = target;
+            e.dataTransfer.setData('text/plain', draggedPill.dataset.allocationId);
+            e.dataTransfer.effectAllowed = 'copyMove';
+            setTimeout(() => {
+                draggedPill.classList.add('opacity-40');
+            }, 0);
+        }
+    });
+
+    document.addEventListener('dragend', (e) => {
+        if (draggedPill) {
+            draggedPill.classList.remove('opacity-40');
+            draggedPill = null;
+        }
+    });
+    
+    // Setup drop zones
+    const dropZones = document.querySelectorAll('.drop-zone');
+    dropZones.forEach(zone => {
+        zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            zone.classList.add('bg-white/10'); // Highlight zone
+        });
+
+        zone.addEventListener('dragleave', e => {
+            zone.classList.remove('bg-white/10');
+        });
+
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('bg-white/10');
+            
+            const allocId = e.dataTransfer.getData('text/plain');
+            if (allocId && draggedPill) {
+                // Clear any existing content
+                zone.innerHTML = '';
+                
+                // Construct the cloned HTML to ensure it has the clear button and grid styling
+                const subjectName = draggedPill.dataset.subjectName;
+                const teacherName = draggedPill.dataset.teacherName;
+                
+                // Get original color class if exists
+                let colorClass = 'pill-color-0';
+                draggedPill.classList.forEach(cls => {
+                    if (cls.startsWith('pill-color-')) colorClass = cls;
+                });
+
+                const cloneHTML = `
+                    <div class="glass-pill relative group w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-black/40 cursor-grab hover:bg-white/10 transition-all shadow-md ${colorClass}"
+                         draggable="true"
+                         data-allocation-id="${allocId}"
+                         data-subject-name="${subjectName}"
+                         data-teacher-name="${teacherName}">
+                        <div class="text-xs font-bold text-white truncate" title="${subjectName}">${subjectName}</div>
+                        <div class="text-[10px] text-gray-400 mt-0.5 truncate uppercase">${teacherName}</div>
+                        <button class="clear-btn absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold shadow-[0_0_10px_rgba(220,38,38,0.8)] z-10">✕</button>
+                    </div>
+                `;
+                
+                zone.innerHTML = cloneHTML;
+                
+                // If dragged from another drop zone (move instead of copy), empty original zone
+                if (draggedPill.parentElement.classList.contains('drop-zone') && draggedPill.parentElement !== zone) {
+                    draggedPill.parentElement.innerHTML = '';
+                }
+            }
+        });
+    });
+
+    // ------------------------------------------------------------
+    // 3. Clear Button Logic
+    // ------------------------------------------------------------
+    document.addEventListener('click', e => {
+        if (e.target.classList.contains('clear-btn')) {
+            const btn = e.target;
+            const dropZone = btn.closest('.drop-zone');
+            if (dropZone) {
+                dropZone.innerHTML = '';
+            }
+        }
+    });
+
+    // ------------------------------------------------------------
+    // 4. Save Timetable
+    // ------------------------------------------------------------
+    const saveBtn = document.getElementById('saveTimetableBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const timetableData = [];
+            
+            document.querySelectorAll('.drop-zone').forEach(zone => {
+                const pill = zone.querySelector('.glass-pill');
+                if (pill) {
+                    timetableData.push({
+                        day: zone.dataset.day,
+                        period: zone.dataset.period,
+                        allocation_id: pill.dataset.allocationId
+                    });
+                }
+            });
+            
+            // UI feedback
+            const originalText = saveBtn.innerText;
+            saveBtn.innerText = 'Saving...';
+            saveBtn.disabled = true;
+
+            try {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                const response = await fetch("{% url 'save_timetable' class_section.id %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify(timetableData)
+                });
+                
+                if (response.ok) {
+                    // Success visual feedback
+                    saveBtn.innerText = '✓ Saved Successfully';
+                    saveBtn.classList.replace('from-orange-600', 'from-green-600');
+                    saveBtn.classList.replace('to-orange-400', 'to-green-400');
+                    saveBtn.classList.replace('border-orange-400', 'border-green-400');
+                    saveBtn.classList.replace('shadow-[0_0_15px_rgba(234,88,12,0.6)]', 'shadow-[0_0_15px_rgba(34,197,94,0.6)]');
+                    
+                    setTimeout(() => {
+                        saveBtn.innerText = originalText;
+                        saveBtn.disabled = false;
+                        saveBtn.classList.replace('from-green-600', 'from-orange-600');
+                        saveBtn.classList.replace('to-green-400', 'to-orange-400');
+                        saveBtn.classList.replace('border-green-400', 'border-orange-400');
+                        saveBtn.classList.replace('shadow-[0_0_15px_rgba(34,197,94,0.6)]', 'shadow-[0_0_15px_rgba(234,88,12,0.6)]');
+                    }, 2000);
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    alert('Error saving timetable: ' + (data.error || 'Server error'));
+                    saveBtn.innerText = originalText;
+                    saveBtn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Network error while saving timetable.');
+                saveBtn.innerText = originalText;
+                saveBtn.disabled = false;
+            }
+        });
+    }
+});
+</script>
+
+{% endblock %}

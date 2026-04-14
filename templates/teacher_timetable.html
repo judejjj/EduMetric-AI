@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}My Timetable{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="glass-panel p-6 rounded-xl border-b border-blue-500/30 flex justify-between items-center sm:flex-row flex-col gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
+                My Weekly Timetable
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">Here is your scheduled class assignments for the week.</p>
+        </div>
+        <a href="{% url 'teacher_dashboard' %}" class="px-5 py-2.5 bg-gray-700/50 hover:bg-gray-700/80 rounded-lg text-gray-300 font-semibold border border-white/10 transition-colors">
+            &larr; Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Timetable Grid -->
+    <div class="glass-panel p-5 rounded-xl border border-white/10 overflow-x-auto shadow-xl">
+        <table class="w-full text-left border-collapse min-w-[700px]">
+            <thead>
+                <tr>
+                    <th class="p-3 border-b border-white/10 text-gray-400 font-semibold w-24 uppercase tracking-wider text-sm">Day \ P</th>
+                    {% for p in "123456"|make_list %}
+                    <th class="p-3 border-b border-white/10 text-gray-400 font-semibold text-center w-32">Period {{ p }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in "12345" %}
+                <tr>
+                    {% if day == "1" %}{% with d="MON" %}
+                        <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                        {% for p in "123456"|make_list %}
+                        <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent relative h-24 align-top">
+                            {% for slot in slots %}
+                                {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                    <div class="glass-pill relative w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-indigo-500/20 shadow-md">
+                                        <div class="text-xs font-bold text-indigo-200 truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                        <div class="text-[10px] text-indigo-300/70 mt-0.5 truncate">{{ slot.class_section.name }}</div>
+                                        <a href="{% url 'teacher_attendance' slot.allocation.id %}" class="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] bg-green-500/20 text-green-300 rounded hover:bg-green-500/40 transition-colors border border-green-500/30">Attd</a>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    {% endwith %}{% endif %}
+                    
+                    {% if day == "2" %}{% with d="TUE" %}
+                        <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                        {% for p in "123456"|make_list %}
+                        <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent relative h-24 align-top">
+                            {% for slot in slots %}
+                                {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                    <div class="glass-pill relative w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-indigo-500/20 shadow-md">
+                                        <div class="text-xs font-bold text-indigo-200 truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                        <div class="text-[10px] text-indigo-300/70 mt-0.5 truncate">{{ slot.class_section.name }}</div>
+                                        <a href="{% url 'teacher_attendance' slot.allocation.id %}" class="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] bg-green-500/20 text-green-300 rounded hover:bg-green-500/40 transition-colors border border-green-500/30">Attd</a>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    {% endwith %}{% endif %}
+                    
+                    {% if day == "3" %}{% with d="WED" %}
+                        <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                        {% for p in "123456"|make_list %}
+                        <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent relative h-24 align-top">
+                            {% for slot in slots %}
+                                {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                    <div class="glass-pill relative w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-indigo-500/20 shadow-md">
+                                        <div class="text-xs font-bold text-indigo-200 truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                        <div class="text-[10px] text-indigo-300/70 mt-0.5 truncate">{{ slot.class_section.name }}</div>
+                                        <a href="{% url 'teacher_attendance' slot.allocation.id %}" class="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] bg-green-500/20 text-green-300 rounded hover:bg-green-500/40 transition-colors border border-green-500/30">Attd</a>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    {% endwith %}{% endif %}
+                    
+                    {% if day == "4" %}{% with d="THU" %}
+                        <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                        {% for p in "123456"|make_list %}
+                        <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent relative h-24 align-top">
+                            {% for slot in slots %}
+                                {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                    <div class="glass-pill relative w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-indigo-500/20 shadow-md">
+                                        <div class="text-xs font-bold text-indigo-200 truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                        <div class="text-[10px] text-indigo-300/70 mt-0.5 truncate">{{ slot.class_section.name }}</div>
+                                        <a href="{% url 'teacher_attendance' slot.allocation.id %}" class="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] bg-green-500/20 text-green-300 rounded hover:bg-green-500/40 transition-colors border border-green-500/30">Attd</a>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    {% endwith %}{% endif %}
+                    
+                    {% if day == "5" %}{% with d="FRI" %}
+                        <td class="p-3 border-b border-white/5 font-bold text-indigo-300 bg-black/20 text-sm align-middle">{{ d }}</td>
+                        {% for p in "123456"|make_list %}
+                        <td class="p-1.5 border-b border-white/5 border-l border-white/5 bg-transparent relative h-24 align-top">
+                            {% for slot in slots %}
+                                {% if slot.day_of_week == d and slot.period_number|stringformat:"s" == p %}
+                                    <div class="glass-pill relative w-full h-full min-h-[60px] p-2 rounded border border-white/10 bg-indigo-500/20 shadow-md">
+                                        <div class="text-xs font-bold text-indigo-200 truncate" title="{{ slot.allocation.subject.name }}">{{ slot.allocation.subject.name }}</div>
+                                        <div class="text-[10px] text-indigo-300/70 mt-0.5 truncate">{{ slot.class_section.name }}</div>
+                                        <a href="{% url 'teacher_attendance' slot.allocation.id %}" class="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] bg-green-500/20 text-green-300 rounded hover:bg-green-500/40 transition-colors border border-green-500/30">Attd</a>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    {% endwith %}{% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

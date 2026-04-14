@@ -39,4 +39,10 @@ urlpatterns = [
     path('admin-dashboard/export-underperforming-csv/', views.admin_export_underperforming_teachers_csv, name='admin_export_underperforming_teachers_csv'),
     path('staff/class-report/<int:class_id>/', views.staff_class_report, name='staff_class_report'),
     path('teacher/attendance/<int:allocation_id>/', views.teacher_attendance, name='teacher_attendance'),
+
+path('staff/class/<int:class_id>/timetable/', views.staff_timetable_builder, name='staff_timetable_builder'),
+path('staff/class/<int:class_id>/timetable/save/', views.save_timetable, name='save_timetable'),
+path('teacher/timetable/', views.teacher_timetable, name='teacher_timetable'),
 ]
+
+

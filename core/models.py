@@ -187,3 +187,22 @@ class AttendanceRecord(models.Model):
     def __str__(self):
         status = 'Present' if self.is_present else 'Absent'
         return f"{self.student.username} - {self.allocation} - {self.date} [{status}]"
+
+
+class TimetableSlot(models.Model):
+    DAYS_OF_WEEK = [
+        ('MON', 'Monday'), ('TUE', 'Tuesday'), ('WED', 'Wednesday'),
+        ('THU', 'Thursday'), ('FRI', 'Friday')
+    ]
+    
+    class_section = models.ForeignKey(ClassSection, on_delete=models.CASCADE) 
+    period_number = models.IntegerField() # 1 through 7
+    day_of_week = models.CharField(max_length=3, choices=DAYS_OF_WEEK)
+    allocation = models.ForeignKey(Allocation, on_delete=models.CASCADE) 
+
+    class Meta:
+        # Ensures two subjects can't be scheduled in the same class at the same time
+        unique_together = ('class_section', 'day_of_week', 'period_number')
+
+    def __str__(self):
+        return f"{self.day_of_week} P{self.period_number} - {self.allocation.subject.name}"
